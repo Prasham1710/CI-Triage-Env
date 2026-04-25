@@ -13,7 +13,7 @@ dependencies = [
     "datasets>=2.18",
     "huggingface_hub>=0.23",
     "jsonschema>=4.21",
-    "openenv>=0.1.13",
+    "openenv-core>=0.2.3",
 ]
 
 [project.optional-dependencies]
