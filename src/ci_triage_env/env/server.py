@@ -219,7 +219,7 @@ class CITriageEnv(MCPEnvironment):
 # Use ``build_app()`` from tests to inject scenarios.
 # ---------------------------------------------------------------------------
 
-def build_app(env_factory=None):
+def build_app(env_factory=None, mount_visualizer: bool = True):
     """Build the OpenEnv-canonical FastAPI app.
 
     Args:
@@ -227,15 +227,22 @@ def build_app(env_factory=None):
             (OpenEnv's stateless HTTP semantics) and per WebSocket session.
             Defaults to ``CITriageEnv`` (loads scenarios from
             ``CI_TRIAGE_SCENARIO_SOURCE`` or ``data_artifacts/scenarios``).
+        mount_visualizer: If True (default), mount the static replay viewer
+            under ``/viz``. Set False for headless deployments.
     """
     factory = env_factory or CITriageEnv
-    return openenv_create_app(
+    app = openenv_create_app(
         env=factory,
         action_cls=CITriageAction,
         observation_cls=CITriageObservation,
         env_name="ci-triage",
         max_concurrent_envs=4,
     )
+    if mount_visualizer:
+        from ci_triage_env.visualizer.server import build_visualizer_app
+
+        app.mount("/viz", build_visualizer_app(), name="viz")
+    return app
 
 
 if __name__ == "__main__":
