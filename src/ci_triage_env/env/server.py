@@ -27,9 +27,10 @@ from fastmcp import FastMCP
 from openenv.core.env_server.http_server import create_app as openenv_create_app
 from openenv.core.env_server.mcp_environment import MCPEnvironment
 
-from ci_triage_env.env.episode import EpisodeManager
+from ci_triage_env.env.episode import EpisodeManager, EpisodeTerminatedError
 from ci_triage_env.env.scenario_loader import load_scenarios
 from ci_triage_env.env.tools import ALL_TOOL_HANDLERS, ToolHandler
+from ci_triage_env.env.trace import trace_dir, write_trace
 from ci_triage_env.env.wire import CITriageAction, CITriageObservation, CITriageState
 from ci_triage_env.schemas.observation import Observation as DomainObservation
 from ci_triage_env.schemas.scenario import Scenario, ToolOutput
@@ -164,7 +165,7 @@ class CITriageEnv(MCPEnvironment):
         if self._episode is None:
             raise RuntimeError("env has no active episode; call reset first")
         if self._episode.is_terminated:
-            raise RuntimeError("episode already terminated")
+            raise EpisodeTerminatedError("episode already terminated")
 
         if action.kind == "tool_call":
             if action.tool_call is None:
@@ -172,19 +173,24 @@ class CITriageEnv(MCPEnvironment):
             handler = self._handlers.get(action.tool_call.tool_name)
             if handler is None:
                 raise KeyError(f"unknown tool: {action.tool_call.tool_name}")
-            output = handler.call(
-                action.tool_call.args,
-                self._episode.scenario,
-                self._episode.history,
-            )
-            return self._wrap(self._episode.apply_tool_call(action.tool_call, output))
-
-        if action.kind == "submit_diagnosis":
+            domain_obs = self._episode.apply_tool_call(action.tool_call, handler)
+        elif action.kind == "submit_diagnosis":
             if action.terminal is None:
                 raise ValueError("kind='submit_diagnosis' requires a terminal payload")
-            return self._wrap(self._episode.apply_terminal(action.terminal))
+            domain_obs = self._episode.apply_terminal(action.terminal)
+        else:
+            raise ValueError(f"unknown action kind: {action.kind}")
 
-        raise ValueError(f"unknown action kind: {action.kind}")
+        if domain_obs.is_terminal:
+            try:
+                write_trace(self._episode, trace_dir())
+            except OSError:
+                # Trace write is best-effort: never fail an episode because the
+                # trace dir is read-only or full. The caller can still inspect
+                # state via /state.
+                pass
+
+        return self._wrap(domain_obs)
 
     @property
     def state(self) -> CITriageState:
