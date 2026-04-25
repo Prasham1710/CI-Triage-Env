@@ -39,3 +39,19 @@ def load_cached(dataset_name: str) -> Iterator:
         return
     for path in sorted(target.glob("*.json")):
         yield FailureRecord.model_validate_json(path.read_text())
+
+
+def load_all_cached() -> list:
+    """Return all cached ``FailureRecord``s across every dataset sub-directory."""
+    from ci_triage_env.data.datasets._base import FailureRecord  # circular guard
+
+    root = cache_root()
+    records = []
+    if not root.exists():
+        return records
+    for json_path in sorted(root.rglob("*.json")):
+        try:
+            records.append(FailureRecord.model_validate_json(json_path.read_text()))
+        except Exception:
+            pass
+    return records
