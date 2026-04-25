@@ -1,0 +1,4 @@
+081109 203615 148 INFO dfs.DataNode$PacketResponder: PacketResponder 1 for block blk_1 terminating
+081109 203807 222 WARN dfs.DataNode$PacketResponder: java.io.IOException: Connection reset by peer
+081109 203808 223 INFO dfs.DataNode: Replica seal complete
+081109 203809 224 ERROR dfs.DataNode: OutOfMemoryError exceeded heap

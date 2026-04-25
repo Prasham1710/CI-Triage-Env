@@ -1,0 +1,3 @@
+Jun 14 15:16:01 combo sshd(pam_unix)[19939]: authentication failure
+Jun 14 15:16:02 combo kernel: Out of memory: kill process 1234 (java)
+Jun 14 15:16:03 combo systemd: started service
