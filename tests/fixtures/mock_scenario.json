@@ -1,0 +1,91 @@
+{
+  "schema_version": "1.0",
+  "scenario_id": "race_flake-v1-seed42-mock",
+  "family": "race_flake",
+  "seed": 42,
+  "ground_truth": {
+    "label": "race_flake",
+    "rationale": "mock rationale for race_flake",
+    "is_ambiguous": false,
+    "confidence_target": 1.0
+  },
+  "failure_summary": {
+    "test_name": "tests/unit/test_widget.py::test_concurrent_update",
+    "suite": "unit",
+    "branch": "main",
+    "last_passing_commit": "deadbeef",
+    "initial_log_excerpt": "AssertionError: expected 2, got 1",
+    "timestamp": "2026-04-25T12:00:00Z"
+  },
+  "tool_outputs": {
+    "read_logs": {
+      "tool_name": "read_logs",
+      "payload": {
+        "lines": [
+          "LOG LINE 1",
+          "LOG LINE 2"
+        ],
+        "truncated": false
+      },
+      "cost_units": 0.001
+    },
+    "query_flake_history": {
+      "tool_name": "query_flake_history",
+      "payload": {
+        "failure_count": 7,
+        "pass_count": 93,
+        "recent_failures": []
+      },
+      "cost_units": 0.002
+    },
+    "recent_commits": {
+      "tool_name": "recent_commits",
+      "payload": {
+        "commits": [
+          {
+            "sha": "abc123",
+            "msg": "noop"
+          }
+        ]
+      },
+      "cost_units": 0.002
+    },
+    "rerun_test": {
+      "tool_name": "rerun_test",
+      "payload": {
+        "results": [
+          {
+            "passed": true
+          },
+          {
+            "passed": true
+          }
+        ]
+      },
+      "cost_units": 0.01
+    }
+  },
+  "informative_tools": [
+    "read_logs",
+    "query_flake_history",
+    "rerun_test"
+  ],
+  "minimal_evidence_set": [
+    "query_flake_history",
+    "rerun_test"
+  ],
+  "correct_terminal_action": {
+    "primary": "submit_diagnosis",
+    "args": {
+      "diagnosis": "race_flake",
+      "confidence": 0.9
+    },
+    "acceptable_alternatives": []
+  },
+  "metadata": {
+    "generator_version": "mock-0.1",
+    "generated_at": "2026-04-25T12:00:00Z",
+    "source_log_hash": null,
+    "difficulty": "medium"
+  }
+}

@@ -1,0 +1,44 @@
+name: CI
+on:
+  push:
+    branches: [main, "branch-*/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - name: Install Python
+        run: uv python install 3.11
+      - name: Sync deps
+        run: uv sync --extra dev --extra data
+      - name: Lint
+        run: uv run ruff check src/ tests/
+      - name: Test
+        run: uv run pytest -q tests/
+
+  manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv run --with pyyaml python -c "import yaml; yaml.safe_load(open('openenv.yaml'))"
+
+  requirements-txt-fresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: Verify requirements.txt is regenerated
+        run: |
+          uv export --no-dev --extra training --format requirements-txt > /tmp/exported.txt
+          diff -q requirements.txt /tmp/exported.txt || (
+            echo "::error::requirements.txt is stale. Run: uv export --no-dev --extra training --format requirements-txt > requirements.txt"
+            exit 1
+          )

@@ -1,0 +1,26 @@
+schema_version: "1.0"
+name: ci-triage-env
+display_name: "CI Triage Agent Environment"
+description: "Train an LLM to investigate ambiguous CI failures with verifiable rewards."
+type: mcp
+entrypoint: "python -m ci_triage_env.env.server"
+api:
+  port: 8000
+  host: "0.0.0.0"
+mcp:
+  tools:
+    - read_logs
+    - inspect_test_code
+    - run_diagnostic
+    - cluster_metrics
+    - query_flake_history
+    - recent_commits
+    - check_owner
+    - rerun_test
+    - quarantine_test
+    - file_bug
+    - ping_owner
+metadata:
+  version: "0.1.0"
+  authors: ["Sahil", "Prasham", "Priyanshi"]
+  hackathon: "scaler-meta-pytorch-openenv-2026"

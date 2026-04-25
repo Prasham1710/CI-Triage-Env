@@ -1,0 +1,189 @@
+{
+  "schema_version": "1.0",
+  "episode": {
+    "episode_id": "mock-episode-race_flake-v1-seed42-mock-good",
+    "scenario_id": "race_flake-v1-seed42-mock",
+    "seed": 42,
+    "step": 4,
+    "history": [
+      {
+        "step": 0,
+        "action": {
+          "tool_name": "read_logs",
+          "args": {
+            "scope": "test"
+          }
+        },
+        "observation": {
+          "episode_id": "mock-episode-race_flake-v1-seed42-mock-good",
+          "step": 0,
+          "failure_summary": null,
+          "tool_response": {
+            "tool_name": "read_logs",
+            "args": {
+              "scope": "test"
+            },
+            "output": {
+              "lines": [
+                "LOG LINE 1",
+                "LOG LINE 2"
+              ],
+              "truncated": false
+            },
+            "cost_charged": 0.001
+          },
+          "budget_remaining": {
+            "tool_calls_remaining": 9,
+            "cost_remaining": 0.999
+          },
+          "is_terminal": false,
+          "probe_question": null
+        },
+        "cost_charged": 0.001
+      },
+      {
+        "step": 1,
+        "action": {
+          "tool_name": "query_flake_history",
+          "args": {}
+        },
+        "observation": {
+          "episode_id": "mock-episode-race_flake-v1-seed42-mock-good",
+          "step": 1,
+          "failure_summary": null,
+          "tool_response": {
+            "tool_name": "query_flake_history",
+            "args": {},
+            "output": {
+              "failure_count": 7,
+              "pass_count": 93,
+              "recent_failures": []
+            },
+            "cost_charged": 0.002
+          },
+          "budget_remaining": {
+            "tool_calls_remaining": 8,
+            "cost_remaining": 0.997
+          },
+          "is_terminal": false,
+          "probe_question": null
+        },
+        "cost_charged": 0.002
+      },
+      {
+        "step": 2,
+        "action": {
+          "tool_name": "recent_commits",
+          "args": {}
+        },
+        "observation": {
+          "episode_id": "mock-episode-race_flake-v1-seed42-mock-good",
+          "step": 2,
+          "failure_summary": null,
+          "tool_response": {
+            "tool_name": "recent_commits",
+            "args": {},
+            "output": {
+              "commits": [
+                {
+                  "sha": "abc123",
+                  "msg": "noop"
+                }
+              ]
+            },
+            "cost_charged": 0.002
+          },
+          "budget_remaining": {
+            "tool_calls_remaining": 7,
+            "cost_remaining": 0.995
+          },
+          "is_terminal": false,
+          "probe_question": null
+        },
+        "cost_charged": 0.002
+      },
+      {
+        "step": 3,
+        "action": {
+          "tool_name": "rerun_test",
+          "args": {}
+        },
+        "observation": {
+          "episode_id": "mock-episode-race_flake-v1-seed42-mock-good",
+          "step": 3,
+          "failure_summary": null,
+          "tool_response": {
+            "tool_name": "rerun_test",
+            "args": {},
+            "output": {
+              "results": [
+                {
+                  "passed": true
+                },
+                {
+                  "passed": true
+                }
+              ]
+            },
+            "cost_charged": 0.01
+          },
+          "budget_remaining": {
+            "tool_calls_remaining": 6,
+            "cost_remaining": 0.985
+          },
+          "is_terminal": false,
+          "probe_question": null
+        },
+        "cost_charged": 0.01
+      },
+      {
+        "step": 4,
+        "action": {
+          "action_type": "submit_diagnosis",
+          "diagnosis": "race_flake",
+          "confidence": 1.0,
+          "secondary_actions": []
+        },
+        "observation": {
+          "episode_id": "mock-episode-race_flake-v1-seed42-mock-good",
+          "step": 4,
+          "failure_summary": null,
+          "tool_response": null,
+          "budget_remaining": {
+            "tool_calls_remaining": 6,
+            "cost_remaining": 0.985
+          },
+          "is_terminal": true,
+          "probe_question": null
+        },
+        "cost_charged": 0.0
+      }
+    ],
+    "budget": {
+      "tool_calls_remaining": 6,
+      "cost_remaining": 0.985
+    },
+    "is_terminated": true,
+    "final_action": {
+      "action_type": "submit_diagnosis",
+      "diagnosis": "race_flake",
+      "confidence": 1.0,
+      "secondary_actions": []
+    }
+  },
+  "reward_breakdown": {
+    "schema_version": "1.0",
+    "total": 1.0,
+    "format_gate": true,
+    "components": {
+      "diagnosis_correctness": {
+        "raw": 1.0,
+        "weighted": 1.0,
+        "weight": 1.0,
+        "sub_scores": {}
+      }
+    },
+    "counterfactual": null
+  },
+  "counterfactual_replay": null
+}
