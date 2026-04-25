@@ -106,6 +106,45 @@ def cmd_cluster(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_generate(args: argparse.Namespace) -> int:
+    from ci_triage_env.data.instantiation import CorpusBuilder
+
+    ratios_raw = args.split.split("/")
+    if len(ratios_raw) != 3:
+        print("error: --split must be three slash-separated values, e.g. 70/15/15", file=sys.stderr)
+        return 2
+    try:
+        r = [float(v) for v in ratios_raw]
+    except ValueError:
+        print("error: --split values must be numbers", file=sys.stderr)
+        return 2
+    total_r = sum(r)
+    split_ratios = (r[0] / total_r, r[1] / total_r, r[2] / total_r)
+
+    out_dir = Path(args.output_dir) if args.output_dir else Path("data_artifacts/scenarios")
+    builder = CorpusBuilder(
+        total=args.total,
+        split_ratios=split_ratios,
+        base_seed=args.seed,
+    )
+    summary = builder.build(out_dir)
+    print(json.dumps(summary, indent=2))
+    print(f"corpus written to {out_dir}")
+    return 0
+
+
+def cmd_publish_hf(args: argparse.Namespace) -> int:
+    from ci_triage_env.data.publish import publish_to_hf
+
+    token: str | None = args.token or os.environ.get("HF_TOKEN")
+    publish_to_hf(
+        scenarios_dir=Path(args.scenarios_dir),
+        dataset_name=args.dataset_name,
+        token=token,
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="ci_triage_env.data.cli")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -180,6 +219,53 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip LLM fallback even if OPENAI_API_KEY is set.",
     )
     p_cluster.set_defaults(func=cmd_cluster)
+
+    p_generate = sub.add_parser(
+        "generate",
+        help="Generate a scenario corpus from all 7 failure family generators.",
+    )
+    p_generate.add_argument(
+        "--total",
+        type=int,
+        default=200,
+        help="Total number of scenarios to generate (default 200).",
+    )
+    p_generate.add_argument(
+        "--split",
+        default="70/15/15",
+        help="Train/val/held-out split ratios as slash-separated values (default 70/15/15).",
+    )
+    p_generate.add_argument(
+        "--seed",
+        type=int,
+        default=100_000,
+        help="Base seed for deterministic generation (default 100000).",
+    )
+    p_generate.add_argument(
+        "--output-dir",
+        default=None,
+        help="Output directory for scenario JSON files (default data_artifacts/scenarios).",
+    )
+    p_generate.set_defaults(func=cmd_generate)
+
+    p_publish = sub.add_parser(
+        "publish-hf",
+        help="Publish a generated scenario corpus to the HuggingFace dataset hub.",
+    )
+    p_publish.add_argument(
+        "scenarios_dir",
+        help="Directory containing train/, val/, and held_out/ subdirectories.",
+    )
+    p_publish.add_argument(
+        "dataset_name",
+        help="HuggingFace repo id, e.g. 'your-org/ci-triage-scenarios'.",
+    )
+    p_publish.add_argument(
+        "--token",
+        default=None,
+        help="HuggingFace API token (falls back to HF_TOKEN env var).",
+    )
+    p_publish.set_defaults(func=cmd_publish_hf)
 
     return parser
 
