@@ -9,7 +9,7 @@ DEFAULT_SCENARIO_DIR = Path("data_artifacts/scenarios")
 def load_from_disk(path: Path) -> dict[str, Scenario]:
     """Load all *.json files under `path` as Scenario objects, keyed by scenario_id."""
     out: dict[str, Scenario] = {}
-    for fp in sorted(path.glob("*.json")):
+    for fp in sorted(path.rglob("*.json")):
         scenario = Scenario.model_validate_json(fp.read_text())
         out[scenario.scenario_id] = scenario
     return out

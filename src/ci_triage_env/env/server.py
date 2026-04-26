@@ -230,6 +230,9 @@ def build_app(env_factory=None, mount_visualizer: bool = True):
         mount_visualizer: If True (default), mount the static replay viewer
             under ``/viz``. Set False for headless deployments.
     """
+    from fastapi import HTTPException
+    from fastapi.responses import JSONResponse
+
     factory = env_factory or CITriageEnv
     app = openenv_create_app(
         env=factory,
@@ -238,6 +241,16 @@ def build_app(env_factory=None, mount_visualizer: bool = True):
         env_name="ci-triage",
         max_concurrent_envs=4,
     )
+
+    @app.get("/trace/{episode_id}")
+    async def get_trace(episode_id: str) -> JSONResponse:
+        """Return the serialised EpisodeTrace written by the env after termination."""
+        td = trace_dir()
+        trace_path = td / f"{episode_id}.json"
+        if not trace_path.exists():
+            raise HTTPException(status_code=404, detail=f"trace not found: {episode_id}")
+        return JSONResponse(content=__import__("json").loads(trace_path.read_text()))
+
     if mount_visualizer:
         from ci_triage_env.visualizer.server import build_visualizer_app
 

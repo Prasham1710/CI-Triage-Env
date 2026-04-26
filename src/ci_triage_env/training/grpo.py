@@ -58,11 +58,11 @@ def run_grpo(
     from ci_triage_env.training.custom_trainer import GRPOTrainerForToolUse
 
     if env_client is None:
-        from ci_triage_env.training.env_client import EnvClient
-        env_client = EnvClient(env_url)
+        from ci_triage_env.training.mock_env_client import MockEnvClient
+        env_client = MockEnvClient(scenarios_dir=scenarios_train_path)
 
     train_dir = Path(scenarios_train_path)
-    scenario_ids = [p.stem for p in train_dir.glob("*.json")] if train_dir.exists() else []
+    scenario_ids = [p.stem for p in train_dir.rglob("*.json")] if train_dir.exists() else []
 
     rollout = TrainingRollout(
         env_client=env_client,

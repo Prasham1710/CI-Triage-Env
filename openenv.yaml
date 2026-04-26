@@ -3,7 +3,10 @@ name: ci-triage-env
 display_name: "CI Triage Agent Environment"
 description: "Train an LLM to investigate ambiguous CI failures with verifiable rewards."
 type: mcp
-entrypoint: "python -m ci_triage_env.env.server"
+entrypoint: "uvicorn ci_triage_env.env.server:build_app --factory --host 0.0.0.0 --port 8000"
+docker:
+  dockerfile: Dockerfile
+  build_context: "."
 api:
   port: 8000
   host: "0.0.0.0"
