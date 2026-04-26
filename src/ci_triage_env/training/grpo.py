@@ -64,6 +64,10 @@ def run_grpo(
     train_dir = Path(scenarios_train_path)
     scenario_ids = [p.stem for p in train_dir.rglob("*.json")] if train_dir.exists() else []
 
+    hp = dict(GRPO_HYPERPARAMS)
+    if hyperparams:
+        hp.update(hyperparams)
+
     max_turns = hp.pop("max_turns", 4)   # short episodes for faster GRPO
     rollout = TrainingRollout(
         env_client=env_client,
@@ -73,10 +77,6 @@ def run_grpo(
     )
 
     model, tokenizer = load_model_for_sft(model_name=sft_checkpoint_dir)
-
-    hp = dict(GRPO_HYPERPARAMS)
-    if hyperparams:
-        hp.update(hyperparams)
 
     config = GRPOConfig(
         output_dir=output_dir,
