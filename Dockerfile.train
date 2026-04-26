@@ -20,11 +20,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /workspace
 
-# 1. Install unsloth (must come after torch, hence not in pyproject extras)
+# 1. Pin torchao BEFORE installing anything else.
+#    Latest torchao requires torch>=2.11 but this image ships torch 2.4.
+#    transformers>=4.47 pulls torchao as a dep, so we must pin transformers too.
+RUN pip install --no-cache-dir \
+    "torchao==0.5.0" \
+    "transformers==4.46.3" \
+    "trl==0.11.4" \
+    "peft==0.13.2" \
+    "accelerate==0.34.2"
+
+# 2. Install unsloth (must come after torch)
 RUN pip install --no-cache-dir \
     "unsloth[cu121-torch240] @ git+https://github.com/unslothai/unsloth.git"
 
-# 2. Install project + all training deps
+# 3. Install project deps (transformers/trl/peft already pinned above, won't be overridden)
 COPY pyproject.toml README.md ./
 COPY src/ src/
 RUN pip install --no-cache-dir -e ".[data,training]"
