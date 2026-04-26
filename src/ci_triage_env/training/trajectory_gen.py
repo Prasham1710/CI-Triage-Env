@@ -286,6 +286,99 @@ def _filter_top_fraction(
     return trajectories[:keep_n]
 
 
+def _run_parallel(
+    api_key: str,
+    model: str,
+    scenarios_dir: str | None,
+    count: int,
+    budget_usd: float,
+    checkpoint_path: Path,
+    max_workers: int,
+) -> tuple[list[dict], float]:
+    """Run trajectory generation with a thread pool, writing each result to a JSONL checkpoint.
+
+    Each worker gets its own MockEnvClient + TrajectoryGenerator so there is no shared
+    mutable state between threads except the budget counter and the checkpoint file.
+    """
+    import threading
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    # ── load existing checkpoint so we can resume ────────────────────────────
+    done: list[dict] = []
+    if checkpoint_path.exists():
+        for line in checkpoint_path.read_text().splitlines():
+            line = line.strip()
+            if line:
+                try:
+                    done.append(json.loads(line))
+                except json.JSONDecodeError:
+                    pass
+        print(f"Resuming: loaded {len(done)} trajectories from {checkpoint_path}")
+
+    remaining = max(0, count - len(done))
+    if remaining == 0:
+        print("Checkpoint already complete — nothing to generate.")
+        return done, 0.0
+
+    # ── shared state ─────────────────────────────────────────────────────────
+    total_spent = 0.0
+    collected = list(done)
+    lock = threading.Lock()
+
+    thread_local = threading.local()
+
+    def get_worker():
+        """One (env, gen) pair per thread — no cross-thread state sharing."""
+        if not hasattr(thread_local, "gen"):
+            if scenarios_dir:
+                from ci_triage_env.training.mock_env_client import MockEnvClient
+                env = MockEnvClient(scenarios_dir=scenarios_dir)
+            else:
+                from ci_triage_env.training.mock_env_client import MockEnvClient
+                env = MockEnvClient()
+            thread_local.gen = TrajectoryGenerator(
+                api_key=api_key,
+                model=model,
+                budget_usd=1e9,  # unlimited per worker; global budget enforced below
+                env_client=env,
+            )
+            thread_local.prev_spent = 0.0
+        return thread_local.gen
+
+    def run_one(_idx: int) -> dict | None:
+        nonlocal total_spent
+        with lock:
+            if total_spent >= budget_usd:
+                return None
+        gen = get_worker()
+        traj = gen.generate_one()
+        delta = gen.spent - thread_local.prev_spent
+        thread_local.prev_spent = gen.spent
+        with lock:
+            total_spent += delta
+            if traj is not None:
+                collected.append(traj)
+                checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+                with checkpoint_path.open("a") as f:
+                    f.write(json.dumps(traj) + "\n")
+        return traj
+
+    completed = 0
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = [pool.submit(run_one, i) for i in range(remaining)]
+        for future in as_completed(futures):
+            completed += 1
+            future.result()  # surface exceptions
+            if completed % max(1, max_workers * 2) == 0:
+                with lock:
+                    print(
+                        f"  [{len(done) + completed}/{count}] "
+                        f"collected={len(collected)}  spent=${total_spent:.2f}"
+                    )
+
+    return collected, total_spent
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="ci_triage_env.training.trajectory_gen")
     parser.add_argument("--count", type=int, default=600, help="Trajectories to attempt")
@@ -293,11 +386,14 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--budget", type=float, default=25.0, help="USD spend cap")
     parser.add_argument("--env-url", default="http://localhost:8000", help="Env server URL (ignored when --scenarios-dir is set)")
     parser.add_argument("--output", default="data_artifacts/sft_dataset/", help="Output dir")
-    parser.add_argument("--top-fraction", type=float, default=0.30, help="Keep top N%")
+    parser.add_argument("--top-fraction", type=float, default=0.50, help="Keep top N%%")
+    parser.add_argument("--workers", type=int, default=10,
+                        help="Parallel worker threads (default 10; increase to 20 if not rate-limited)")
+    parser.add_argument("--checkpoint", default="data_artifacts/traj_checkpoint.jsonl",
+                        help="JSONL file written after each trajectory. Restart from here if interrupted.")
     parser.add_argument(
         "--scenarios-dir", default=None,
-        help="Path to a directory of scenario JSON files. Uses MockEnvClient in-process — no server needed. "
-             "Recommended for local generation."
+        help="Path to a directory of scenario JSON files. Uses MockEnvClient in-process — no server needed."
     )
     parser.add_argument(
         "--mock", action="store_true",
@@ -309,34 +405,31 @@ def main(argv: list[str] | None = None) -> None:
     if not api_key:
         print("warning: OPENAI_API_KEY not set — generation will fail on first call")
 
+    scenarios_dir: str | None = None
     if args.scenarios_dir:
-        from ci_triage_env.training.mock_env_client import MockEnvClient
-        env = MockEnvClient(scenarios_dir=args.scenarios_dir)
-        print(f"Using MockEnvClient with {len(env.scenario_ids)} real scenarios from {args.scenarios_dir}")
-    elif args.mock:
-        from ci_triage_env.training.mock_env_client import MockEnvClient
-        env = MockEnvClient()
-    else:
-        from ci_triage_env.training.env_client import EnvClient
-        env = EnvClient(args.env_url)
+        scenarios_dir = args.scenarios_dir
+        # Print count for info only — actual clients created per-thread
+        from ci_triage_env.training.mock_env_client import MockEnvClient as _MC
+        _probe = _MC(scenarios_dir=scenarios_dir)
+        print(f"Using {len(_probe.scenario_ids)} real scenarios from {scenarios_dir}")
+    elif not args.mock:
+        # Falls back to EnvClient in per-thread workers if no scenarios-dir — not supported
+        # in parallel mode; just use mock instead.
+        print("No --scenarios-dir given; using synthetic MockEnvClient.")
 
-    gen = TrajectoryGenerator(api_key=api_key, model=args.model,
-                              budget_usd=args.budget, env_client=env)
+    checkpoint_path = Path(args.checkpoint)
+    print(f"Checkpoint: {checkpoint_path}  (safe to Ctrl+C and resume)")
+    print(f"Workers: {args.workers}  |  target: {args.count} attempts  |  budget: ${args.budget}")
 
-    trajectories: list[dict] = []
-    for i in range(args.count):
-        if gen.spent >= gen.budget:
-            print(f"Budget exhausted after {i} attempts (${gen.spent:.2f}).")
-            break
-
-        traj = gen.generate_one()
-        if traj is None:
-            continue
-        trajectories.append(traj)
-
-        if (i + 1) % 100 == 0:
-            print(f"[{i+1}/{args.count}] spent=${gen.spent:.2f} collected={len(trajectories)}")
-            _update_budget_log(gen.spent, len(trajectories))
+    trajectories, total_spent = _run_parallel(
+        api_key=api_key,
+        model=args.model,
+        scenarios_dir=scenarios_dir,
+        count=args.count,
+        budget_usd=args.budget,
+        checkpoint_path=checkpoint_path,
+        max_workers=args.workers,
+    )
 
     sft_set = _filter_top_fraction(trajectories, args.top_fraction)
 
@@ -353,12 +446,12 @@ def main(argv: list[str] | None = None) -> None:
             f"\nGenerated {len(trajectories)}, kept top {len(sft_set)}\n"
             f"Reward: min={min(rewards):.3f}  max={max(rewards):.3f}  "
             f"median={sft_set[mid]['reward']:.3f}\n"
-            f"Total spent: ${gen.spent:.2f}"
+            f"Total spent: ${total_spent:.2f}"
         )
     else:
         print("No valid trajectories collected.")
 
-    _update_budget_log(gen.spent, len(trajectories))
+    _update_budget_log(total_spent, len(trajectories))
 
 
 if __name__ == "__main__":
