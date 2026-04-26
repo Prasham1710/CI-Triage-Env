@@ -1,12 +1,14 @@
-"""SFT warmstart trainer — Qwen3-4B + LoRA on the C3 trajectory dataset.
+"""SFT warmstart trainer — Qwen3-4B + LoRA via unsloth.
 
-All GPU-heavy imports (trl, torch, peft) are lazy so the module is
+All GPU-heavy imports (unsloth, trl, torch) are lazy so the module is
 importable without a GPU for testing.
 """
 
 from __future__ import annotations
 
-MODEL_NAME = "Qwen/Qwen3-4B"
+# unsloth hosts optimised weights; the bnb-4bit variant skips on-the-fly quantisation
+# so it loads ~2x faster than the base float16 weights.
+MODEL_NAME = "unsloth/Qwen3-4B-bnb-4bit"
 MAX_SEQ_LEN = 8192
 
 
@@ -14,48 +16,29 @@ def load_model_for_sft(
     model_name: str = MODEL_NAME,
     max_seq_length: int = MAX_SEQ_LEN,
 ):
-    """Load Qwen3-4B in 4-bit via bitsandbytes + LoRA via PEFT. Requires GPU."""
-    import torch
-    from peft import LoraConfig, TaskType, get_peft_model  # type: ignore[import]
-    from transformers import (  # type: ignore[import]
-        AutoModelForCausalLM,
-        AutoTokenizer,
-        BitsAndBytesConfig,
-    )
+    """Load Qwen3-4B with unsloth 4-bit + LoRA. Requires GPU and unsloth installed."""
+    from unsloth import FastLanguageModel  # type: ignore[import]
 
-    bnb_config = BitsAndBytesConfig(
+    model, tokenizer = FastLanguageModel.from_pretrained(
+        model_name=model_name,
+        max_seq_length=max_seq_length,
         load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.bfloat16,
-        bnb_4bit_use_double_quant=True,
+        dtype=None,          # auto — bfloat16 on Ampere+
     )
 
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        quantization_config=bnb_config,
-        device_map="auto",
-        trust_remote_code=True,
-    )
-    model.gradient_checkpointing_enable()
-
-    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-    tokenizer.model_max_length = max_seq_length
-
-    lora_config = LoraConfig(
+    model = FastLanguageModel.get_peft_model(
+        model,
         r=16,
-        lora_alpha=32,
         target_modules=[
             "q_proj", "k_proj", "v_proj", "o_proj",
             "gate_proj", "up_proj", "down_proj",
         ],
-        lora_dropout=0.0,
+        lora_alpha=16,
+        lora_dropout=0,
         bias="none",
-        task_type=TaskType.CAUSAL_LM,
+        use_gradient_checkpointing="unsloth",  # unsloth's gradient checkpointing is 30% faster
+        random_state=3407,
     )
-    model = get_peft_model(model, lora_config)
-    model.print_trainable_parameters()
     return model, tokenizer
 
 
@@ -77,7 +60,7 @@ def run_sft(
     gradient_accumulation_steps: int = 4,
     model_name: str = MODEL_NAME,
 ) -> str:
-    """Train the SFT warmstart model. Requires GPU + trl + peft + bitsandbytes.
+    """Train the SFT warmstart model. Requires GPU + unsloth + trl installed.
 
     Args:
         dataset_path: Path to a HF Dataset saved by trajectory_gen (save_to_disk).
@@ -104,10 +87,13 @@ def run_sft(
         gradient_accumulation_steps=gradient_accumulation_steps,
         learning_rate=2e-5,
         warmup_ratio=0.05,
+        bf16=True,
+        fp16=False,
         logging_steps=10,
         save_steps=100,
         report_to="wandb",
         max_seq_length=MAX_SEQ_LEN,
+        dataset_text_field="text",
     )
     trainer = SFTTrainer(
         model=model,

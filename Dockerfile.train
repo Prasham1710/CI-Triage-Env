@@ -9,7 +9,8 @@
 #   HF_SCENARIOS_REPO, HF_SFT_DATASET_REPO, HF_MODEL_REPO (optional)
 #   GRPO_STEPS (optional, default 100)
 
-FROM pytorch/pytorch:2.4.0-cuda12.1-cudnn9-devel
+# torch 2.5.1 + CUDA 12.4 — minimum needed for unsloth + transformers>=4.51 + Qwen3.
+FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
@@ -20,18 +21,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /workspace
 
-# 1. Pin versions compatible with torch 2.4.1 in this image.
-#    torchao latest requires torch>=2.11; transformers>=4.47 pulls torchao as dep.
-#    bitsandbytes replaces unsloth for 4-bit quantisation.
+# 1. Install unsloth for this exact torch/CUDA combo.
+#    This resolves and installs compatible versions of:
+#    transformers>=4.51 (Qwen3 + CompileConfig), peft, trl, accelerate, xformers.
 RUN pip install --no-cache-dir \
-    "torchao==0.5.0" \
-    "transformers==4.46.3" \
-    "trl==0.11.4" \
-    "peft==0.13.2" \
-    "accelerate==0.34.2" \
-    "bitsandbytes>=0.43.0"
+    "unsloth[cu124-torch251] @ git+https://github.com/unslothai/unsloth.git"
 
-# 2. Install project deps (versions pinned above won't be overridden)
+# 2. Install project deps (unsloth already locked transformers/trl/peft above).
 COPY pyproject.toml README.md ./
 COPY src/ src/
 RUN pip install --no-cache-dir -e ".[data,training]"

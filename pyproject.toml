@@ -19,10 +19,11 @@ dependencies = [
 
 [project.optional-dependencies]
 training = [
-    "torch>=2.3",
-    "transformers>=4.45",
-    "trl>=0.11",
-    "accelerate>=0.30",
+    "torch>=2.5",
+    "transformers>=4.51",
+    "trl>=0.12",
+    "peft>=0.14",
+    "accelerate>=0.34",
     "wandb>=0.17",
     "matplotlib>=3.8",
     "seaborn>=0.13",
