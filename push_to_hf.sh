@@ -73,6 +73,8 @@ emoji: 🏋️
 colorFrom: yellow
 colorTo: red
 sdk: docker
+app_port: 7860
+hardware: a10g-small
 pinned: false
 ---"
 
