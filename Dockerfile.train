@@ -9,8 +9,9 @@
 #   HF_SCENARIOS_REPO, HF_SFT_DATASET_REPO, HF_MODEL_REPO (optional)
 #   GRPO_STEPS (optional, default 100)
 
-# torch 2.5.1 + CUDA 12.4 — minimum needed for unsloth + transformers>=4.51 + Qwen3.
-FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+# torch 2.6.0 + CUDA 12.6 — minimum required by unsloth-zoo 2026.4.x
+# (torchao>=0.13 needed by unsloth-zoo uses torch.int1, added in torch 2.6.0)
+FROM pytorch/pytorch:2.6.0-cuda12.6-cudnn9-devel
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
@@ -21,26 +22,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /workspace
 
-# 1. Install unsloth for this exact torch/CUDA combo.
-#    This resolves and installs compatible versions of:
-#    transformers>=4.51 (Qwen3 + CompileConfig), peft, trl, accelerate, xformers.
+# Install unsloth for torch 2.6.0 + CUDA 12.6.
+# This pulls compatible: transformers>=4.51 (Qwen3), peft, trl, accelerate,
+# xformers, and torchao>=0.13 (all compatible with torch 2.6.0).
 RUN pip install --no-cache-dir \
-    "unsloth[cu124-torch251] @ git+https://github.com/unslothai/unsloth.git"
+    "unsloth[cu126-torch260] @ git+https://github.com/unslothai/unsloth.git"
 
-# 1b. Pin torchao to a version compatible with torch 2.5.1.
-#     unsloth pulls torchao>=0.8 which references torch.int1 (added in torch 2.6.0).
-#     Forcing 0.5.0 keeps the import chain clean; we use bitsandbytes, not torchao.
-RUN pip install --no-cache-dir "torchao==0.5.0" --force-reinstall
-
-# 2. Install project deps (unsloth already locked transformers/trl/peft above).
+# Install project deps (transformers/trl/peft already resolved by unsloth above).
 COPY pyproject.toml README.md ./
 COPY src/ src/
 RUN pip install --no-cache-dir -e ".[data,training]"
 
-# 3. JupyterLab for interactive mode
+# JupyterLab for interactive mode
 RUN pip install --no-cache-dir jupyterlab ipywidgets
 
-# 4. Copy notebooks and training scripts
+# Copy notebooks and training scripts
 COPY notebooks/ notebooks/
 COPY train.py ./
 
