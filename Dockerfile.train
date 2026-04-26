@@ -6,11 +6,11 @@
 #
 # HF Space secrets to set:
 #   HF_TOKEN, HF_USERNAME, WANDB_API_KEY
-#   HF_SCENARIOS_REPO, HF_SFT_DATASET_REPO, HF_MODEL_REPO (optional)
 #   GRPO_STEPS (optional, default 100)
 
-# torch 2.6.0 + CUDA 12.6 — minimum required by unsloth-zoo 2026.4.x
-# (torchao>=0.13 needed by unsloth-zoo uses torch.int1, added in torch 2.6.0)
+# Use the latest stable PyTorch image.
+# unsloth-zoo pulls torchao>=0.13 which needs torch.utils._pytree.register_constant —
+# available from torch 2.6.0+. cu126 is the matching CUDA toolkit.
 FROM pytorch/pytorch:2.6.0-cuda12.6-cudnn9-devel
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -22,21 +22,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /workspace
 
-# Install unsloth for torch 2.6.0 + CUDA 12.6.
-# This pulls compatible: transformers>=4.51 (Qwen3), peft, trl, accelerate,
-# xformers, and torchao>=0.13 (all compatible with torch 2.6.0).
-RUN pip install --no-cache-dir \
-    "unsloth[cu126-torch260] @ git+https://github.com/unslothai/unsloth.git"
+# 1. Install unsloth exactly as their docs recommend.
+#    --force-reinstall ensures no stale cached wheels.
+RUN pip install --upgrade --force-reinstall --no-cache-dir unsloth unsloth_zoo
 
-# Install project deps (transformers/trl/peft already resolved by unsloth above).
+# 2. transformers v5 from git — required for Qwen3 support.
+#    The stable 4.x release eagerly imports torchao's quantizer which cascades
+#    into a hard import failure across peft → trl → SFTConfig.
+RUN pip install --no-cache-dir \
+    "git+https://github.com/huggingface/transformers.git@main"
+
+# 3. Install project deps.
 COPY pyproject.toml README.md ./
 COPY src/ src/
 RUN pip install --no-cache-dir -e ".[data,training]"
 
-# JupyterLab for interactive mode
+# 4. JupyterLab for interactive mode.
 RUN pip install --no-cache-dir jupyterlab ipywidgets
 
-# Copy notebooks and training scripts
+# 5. Copy notebooks and training scripts.
 COPY notebooks/ notebooks/
 COPY train.py ./
 

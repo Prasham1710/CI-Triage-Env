@@ -1,10 +1,10 @@
-"""SFT warmstart trainer — Qwen3-4B + QLoRA via unsloth.
+"""SFT warmstart trainer — Qwen3-4B + LoRA via unsloth.
 
-QLoRA setup:
-  - Base model loaded in NF4 4-bit (frozen) — the "Q" in QLoRA
-  - LoRA adapter matrices trained in bf16 on top — the "LoRA" part
-  - Double quantization enabled by default in unsloth for ~0.4 bit extra savings
-  - unsloth calls prepare_model_for_kbit_training() internally
+Follows unsloth's official Qwen3 fine-tuning guide:
+  https://unsloth.ai/docs/models/qwen3.5/fine-tune
+  - load_in_16bit=True  (bf16 LoRA — unsloth recommends this for Qwen3)
+  - load_in_4bit=False  (4-bit QLoRA not recommended for Qwen3 per unsloth docs)
+  - transformers v5 required (unsloth/Qwen3 does not work with stable 4.x)
 
 All GPU-heavy imports (unsloth, trl, torch) are lazy so the module is
 importable without a GPU for testing.
@@ -12,9 +12,7 @@ importable without a GPU for testing.
 
 from __future__ import annotations
 
-# unsloth hosts optimised weights; the bnb-4bit variant is pre-quantised to NF4
-# so it loads ~2x faster than quantising float16 on the fly.
-MODEL_NAME = "unsloth/Qwen3-4B-bnb-4bit"
+MODEL_NAME = "unsloth/Qwen3-4B"
 MAX_SEQ_LEN = 8192
 
 
@@ -22,20 +20,17 @@ def load_model_for_sft(
     model_name: str = MODEL_NAME,
     max_seq_length: int = MAX_SEQ_LEN,
 ):
-    """Load Qwen3-4B with QLoRA (NF4 base + bf16 LoRA adapters) via unsloth."""
+    """Load Qwen3-4B with bf16 LoRA via unsloth (transformers v5 required)."""
     from unsloth import FastLanguageModel  # type: ignore[import]
 
-    # load_in_4bit=True → base weights frozen in NF4 4-bit (QLoRA)
-    # dtype=None        → adapter compute dtype auto-selected (bf16 on Ampere+)
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=model_name,
         max_seq_length=max_seq_length,
-        load_in_4bit=True,
-        dtype=None,
+        load_in_4bit=False,
+        load_in_16bit=True,   # bf16 LoRA — unsloth's recommendation for Qwen3
+        full_finetuning=False,
     )
 
-    # QLoRA LoRA config: r=16 is standard for 4B models.
-    # lora_alpha=32 (= 2×r) follows the QLoRA paper's scaling recommendation.
     model = FastLanguageModel.get_peft_model(
         model,
         r=16,
@@ -46,7 +41,7 @@ def load_model_for_sft(
         lora_alpha=32,
         lora_dropout=0.05,
         bias="none",
-        use_gradient_checkpointing="unsloth",  # 30% faster than standard
+        use_gradient_checkpointing="unsloth",
         random_state=3407,
     )
     return model, tokenizer
