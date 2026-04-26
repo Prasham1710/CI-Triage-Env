@@ -69,7 +69,7 @@ echo "==> Preparing training Space push …"
 TRAIN_FRONTMATTER="---
 title: CI Triage Training
 emoji: 🏋️
-colorFrom: orange
+colorFrom: yellow
 colorTo: red
 sdk: docker
 pinned: false
