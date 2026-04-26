@@ -291,12 +291,17 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--count", type=int, default=600, help="Trajectories to attempt")
     parser.add_argument("--model", default="gpt-4o-mini", help="OpenAI model name")
     parser.add_argument("--budget", type=float, default=25.0, help="USD spend cap")
-    parser.add_argument("--env-url", default="http://localhost:8000", help="Env server URL")
+    parser.add_argument("--env-url", default="http://localhost:8000", help="Env server URL (ignored when --scenarios-dir is set)")
     parser.add_argument("--output", default="data_artifacts/sft_dataset/", help="Output dir")
     parser.add_argument("--top-fraction", type=float, default=0.30, help="Keep top N%")
     parser.add_argument(
+        "--scenarios-dir", default=None,
+        help="Path to a directory of scenario JSON files. Uses MockEnvClient in-process — no server needed. "
+             "Recommended for local generation."
+    )
+    parser.add_argument(
         "--mock", action="store_true",
-        help="Use MockEnvClient (no server needed; useful for pipeline smoke-test)"
+        help="Use synthetic MockEnvClient (no scenarios-dir, no server; for smoke-testing only)"
     )
     args = parser.parse_args(argv)
 
@@ -304,7 +309,11 @@ def main(argv: list[str] | None = None) -> None:
     if not api_key:
         print("warning: OPENAI_API_KEY not set — generation will fail on first call")
 
-    if args.mock:
+    if args.scenarios_dir:
+        from ci_triage_env.training.mock_env_client import MockEnvClient
+        env = MockEnvClient(scenarios_dir=args.scenarios_dir)
+        print(f"Using MockEnvClient with {len(env.scenario_ids)} real scenarios from {args.scenarios_dir}")
+    elif args.mock:
         from ci_triage_env.training.mock_env_client import MockEnvClient
         env = MockEnvClient()
     else:
