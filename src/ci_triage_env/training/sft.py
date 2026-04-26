@@ -2,17 +2,19 @@
 
 Follows unsloth's official Qwen3 fine-tuning guide:
   https://unsloth.ai/docs/models/qwen3.5/fine-tune
-  - load_in_16bit=True  (bf16 LoRA — unsloth recommends this for Qwen3)
-  - load_in_4bit=False  (4-bit QLoRA not recommended for Qwen3 per unsloth docs)
-  - transformers v5 required (unsloth/Qwen3 does not work with stable 4.x)
 
-All GPU-heavy imports (unsloth, trl, torch) are lazy so the module is
-importable without a GPU for testing.
+  - load_in_16bit=True, load_in_4bit=False  (bf16 LoRA, unsloth's recommendation)
+  - transformers v5 required (installed via git in Dockerfile.train)
+  - unsloth must be imported before trl/transformers/peft (done inside functions)
+  - max_seq_length and dataset_text_field live on SFTTrainer, not SFTConfig
+    (API changed in newer TRL shipped with transformers v5)
+
+All GPU-heavy imports are lazy so the module is importable without a GPU.
 """
 
 from __future__ import annotations
 
-MODEL_NAME = "unsloth/Qwen3-4B"
+MODEL_NAME  = "unsloth/Qwen3-4B"
 MAX_SEQ_LEN = 8192
 
 
@@ -21,13 +23,14 @@ def load_model_for_sft(
     max_seq_length: int = MAX_SEQ_LEN,
 ):
     """Load Qwen3-4B with bf16 LoRA via unsloth (transformers v5 required)."""
+    import unsloth  # noqa: F401 — must be first; patches trl/transformers on import
     from unsloth import FastLanguageModel  # type: ignore[import]
 
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=model_name,
         max_seq_length=max_seq_length,
         load_in_4bit=False,
-        load_in_16bit=True,   # bf16 LoRA — unsloth's recommendation for Qwen3
+        load_in_16bit=True,     # bf16 LoRA — unsloth's Qwen3 recommendation
         full_finetuning=False,
     )
 
@@ -38,7 +41,7 @@ def load_model_for_sft(
             "q_proj", "k_proj", "v_proj", "o_proj",
             "gate_proj", "up_proj", "down_proj",
         ],
-        lora_alpha=32,
+        lora_alpha=32,          # 2×r per QLoRA paper scaling rule
         lora_dropout=0.05,
         bias="none",
         use_gradient_checkpointing="unsloth",
@@ -65,24 +68,17 @@ def run_sft(
     gradient_accumulation_steps: int = 4,
     model_name: str = MODEL_NAME,
 ) -> str:
-    """Train the SFT warmstart model. Requires GPU + unsloth + trl installed.
+    """Train the SFT warmstart model.
 
-    Args:
-        dataset_path: Path to a HF Dataset saved by trajectory_gen (save_to_disk).
-        output_dir: Where to write the LoRA adapter checkpoint.
-        num_epochs: Training epochs over the SFT dataset.
-        per_device_batch_size: Batch size per GPU.
-        gradient_accumulation_steps: Steps before optimizer update.
-        model_name: Base model or existing checkpoint path.
-
-    Returns:
-        output_dir path as a string.
+    Requires GPU + unsloth + trl (newer version shipped with transformers v5).
+    max_seq_length and dataset_text_field are passed to SFTTrainer, not SFTConfig —
+    this is the API as of TRL shipped alongside transformers v5.
     """
     from datasets import load_from_disk
     from trl import SFTConfig, SFTTrainer  # type: ignore[import]
 
     model, tokenizer = load_model_for_sft(model_name=model_name)
-    raw = load_from_disk(dataset_path)
+    raw   = load_from_disk(dataset_path)
     train = raw.map(lambda t: format_for_sft(t, tokenizer))
 
     config = SFTConfig(
@@ -97,14 +93,14 @@ def run_sft(
         logging_steps=10,
         save_steps=100,
         report_to="wandb",
-        max_seq_length=MAX_SEQ_LEN,
-        dataset_text_field="text",
     )
     trainer = SFTTrainer(
         model=model,
         tokenizer=tokenizer,
         train_dataset=train,
         args=config,
+        max_seq_length=MAX_SEQ_LEN,   # moved from SFTConfig in newer TRL
+        dataset_text_field="text",     # moved from SFTConfig in newer TRL
     )
     trainer.train()
     trainer.save_model(output_dir)
