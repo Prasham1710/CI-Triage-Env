@@ -34,6 +34,7 @@ def run_grpo(
     env_url: str = "http://localhost:8000",
     scenarios_train_path: str = "data_artifacts/scenarios/train",
     hyperparams: dict | None = None,
+    weights_override: dict | None = None,
 ) -> str:
     """Launch GRPO fine-tuning from an SFT checkpoint.
 
@@ -46,6 +47,8 @@ def run_grpo(
         env_url: URL of the running env server (used only when env_client is None).
         scenarios_train_path: Directory containing train split scenario JSON files.
         hyperparams: Override specific GRPO hyperparameters. Merged over GRPO_HYPERPARAMS.
+        weights_override: Override reward component weights passed to CompositeReward.
+            Used by ablation runs to zero out individual reward terms.
 
     Returns:
         output_dir path as a string.
@@ -64,6 +67,7 @@ def run_grpo(
     rollout = TrainingRollout(
         env_client=env_client,
         scenarios_train=scenario_ids,
+        weights=weights_override,
     )
 
     model, tokenizer = load_model_for_sft(model_name=sft_checkpoint_dir)

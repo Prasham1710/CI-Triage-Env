@@ -47,10 +47,12 @@ class TrainingRollout:
         env_client,
         scenarios_train: list[str] | None = None,
         max_turns: int = 12,
+        weights: dict | None = None,
     ) -> None:
         self.env = env_client
         self.scenarios_train: list[str] = scenarios_train or []
         self.max_turns = max_turns
+        self.weights = weights  # None → CompositeReward uses frozen defaults
         self._quarantine_window: list[str] = []
         self._tools_listing: str | None = None
 
@@ -114,9 +116,10 @@ class TrainingRollout:
 
         trace = self.env.get_trace(episode_id)
         scenario = self._load_scenario(trace, episode_id)
-        reward = compute_reward(
-            trace, scenario, quarantine_window=self._quarantine_window
-        )
+        reward_kwargs: dict = {"quarantine_window": self._quarantine_window}
+        if self.weights is not None:
+            reward_kwargs["weights"] = self.weights
+        reward = compute_reward(trace, scenario, **reward_kwargs)
 
         # Update rolling quarantine window (last 50 secondary actions)
         if trace.episode.final_action:
