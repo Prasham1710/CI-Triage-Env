@@ -27,6 +27,11 @@ WORKDIR /workspace
 RUN pip install --no-cache-dir \
     "unsloth[cu124-torch251] @ git+https://github.com/unslothai/unsloth.git"
 
+# 1b. Pin torchao to a version compatible with torch 2.5.1.
+#     unsloth pulls torchao>=0.8 which references torch.int1 (added in torch 2.6.0).
+#     Forcing 0.5.0 keeps the import chain clean; we use bitsandbytes, not torchao.
+RUN pip install --no-cache-dir "torchao==0.5.0" --force-reinstall
+
 # 2. Install project deps (unsloth already locked transformers/trl/peft above).
 COPY pyproject.toml README.md ./
 COPY src/ src/
