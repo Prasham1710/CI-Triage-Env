@@ -12,7 +12,7 @@ from ci_triage_env.training.sft import load_model_for_sft
 
 GRPO_HYPERPARAMS: dict = {
     "learning_rate": 5e-6,
-    "kl_coef": 0.04,
+    "beta": 0.04,              # renamed from kl_coef in newer TRL
     "per_device_train_batch_size": 2,
     "gradient_accumulation_steps": 1,
     "max_prompt_length": 4096,

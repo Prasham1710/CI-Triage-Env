@@ -26,11 +26,13 @@ def load_model_for_sft(
     import unsloth  # noqa: F401 — must be first; patches trl/transformers on import
     from unsloth import FastLanguageModel  # type: ignore[import]
 
+    import torch
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=model_name,
         max_seq_length=max_seq_length,
         load_in_4bit=False,
         load_in_16bit=True,     # bf16 LoRA — unsloth's Qwen3 recommendation
+        dtype=torch.bfloat16,   # explicit: prevents Half/BFloat16 mismatch on LoRA checkpoints
         full_finetuning=False,
     )
 

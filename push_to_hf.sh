@@ -1,29 +1,40 @@
 #!/usr/bin/env bash
 # Push this repo to both HuggingFace Spaces.
 #
-# Usage:
-#   export HF_USERNAME="your_hf_username"
+# Basic usage (same account for both):
+#   export HF_USERNAME="Prasham1710"
 #   export HF_TOKEN="hf_xxxxxxxxxxxx"
+#   bash push_to_hf.sh
+#
+# Push training Space to a DIFFERENT account (e.g. priyanshimaheshwari):
+#   export HF_USERNAME="Prasham1710"        # env server account (unchanged)
+#   export HF_TOKEN="hf_prasham_token"      # env server token
+#   export TRAIN_HF_USERNAME="priyanshimaheshwari"
+#   export TRAIN_HF_TOKEN="hf_priyanshi_token"
+#   export TRAIN_SPACE_NAME="ci-triage-env" # name of the Space in that account
 #   bash push_to_hf.sh
 #
 # What it does:
 #   1. Pushes main → ci-triage-env Space (uses root Dockerfile = env server)
 #   2. Creates a temporary branch where Dockerfile.train becomes Dockerfile,
-#      pushes that → ci-triage-training Space, then cleans up the branch.
+#      pushes that → training Space (possibly in a different account), then cleans up.
 
 set -euo pipefail
 
 : "${HF_USERNAME:?Set HF_USERNAME before running}"
 : "${HF_TOKEN:?Set HF_TOKEN before running}"
 
+# Training Space can live in a different account/space.
+TRAIN_HF_USERNAME="${TRAIN_HF_USERNAME:-${HF_USERNAME}}"
+TRAIN_HF_TOKEN="${TRAIN_HF_TOKEN:-${HF_TOKEN}}"
+TRAIN_SPACE_NAME="${TRAIN_SPACE_NAME:-ci-triage-training}"
+
 ENV_SPACE="ci-triage-env"
-TRAIN_SPACE="ci-triage-training"
 
 HF_ENV_REMOTE="https://${HF_USERNAME}:${HF_TOKEN}@huggingface.co/spaces/${HF_USERNAME}/${ENV_SPACE}"
-HF_TRAIN_REMOTE="https://${HF_USERNAME}:${HF_TOKEN}@huggingface.co/spaces/${HF_USERNAME}/${TRAIN_SPACE}"
+HF_TRAIN_REMOTE="https://${TRAIN_HF_USERNAME}:${TRAIN_HF_TOKEN}@huggingface.co/spaces/${TRAIN_HF_USERNAME}/${TRAIN_SPACE_NAME}"
 
 # Prepend HF Space YAML frontmatter to README.md then restore it afterward.
-# HF requires this block so it knows the Space type and can render the UI correctly.
 inject_readme() {
     local frontmatter="$1"
     local original
@@ -37,7 +48,7 @@ restore_readme() {
 
 # ── 1. Env server Space ───────────────────────────────────────────────────────
 echo ""
-echo "==> Pushing env server to ${ENV_SPACE} …"
+echo "==> Pushing env server to ${HF_USERNAME}/${ENV_SPACE} …"
 
 ENV_FRONTMATTER="---
 title: CI Triage Env
@@ -65,7 +76,7 @@ git branch -D "$TEMP_BRANCH"
 
 # ── 2. Training Space (Dockerfile.train → Dockerfile + frontmatter) ──────────
 echo ""
-echo "==> Preparing training Space push …"
+echo "==> Pushing training Space to ${TRAIN_HF_USERNAME}/${TRAIN_SPACE_NAME} …"
 
 TRAIN_FRONTMATTER="---
 title: CI Triage Training
@@ -89,7 +100,7 @@ git commit -m "chore(spaces): add HF Space config for training [skip ci]"
 git remote remove hf-train 2>/dev/null || true
 git remote add hf-train "$HF_TRAIN_REMOTE"
 git push hf-train "${TEMP_BRANCH}:main" --force
-echo "    ✓ https://huggingface.co/spaces/${HF_USERNAME}/${TRAIN_SPACE}"
+echo "    ✓ https://huggingface.co/spaces/${TRAIN_HF_USERNAME}/${TRAIN_SPACE_NAME}"
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 git checkout main
@@ -98,7 +109,7 @@ git remote remove hf-env   2>/dev/null || true
 git remote remove hf-train 2>/dev/null || true
 
 echo ""
-echo "Both Spaces updated. Docker builds will start automatically (~3 min env / ~15 min training)."
+echo "Both Spaces updated. Docker builds start automatically (~3 min env / ~15 min training)."
 echo "Watch build logs:"
 echo "  https://huggingface.co/spaces/${HF_USERNAME}/${ENV_SPACE}"
-echo "  https://huggingface.co/spaces/${HF_USERNAME}/${TRAIN_SPACE}"
+echo "  https://huggingface.co/spaces/${TRAIN_HF_USERNAME}/${TRAIN_SPACE_NAME}"
