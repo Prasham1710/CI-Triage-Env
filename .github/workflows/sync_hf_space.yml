@@ -1,0 +1,43 @@
+name: Sync → HF Space (env server)
+
+# Pushes the repo to the env-server HF Space on every commit to main.
+# The Space rebuilds its Docker image automatically, which downloads
+# scenarios from HF Hub and restarts the env server.
+#
+# Required GitHub secrets:
+#   HF_TOKEN      - HuggingFace write token (Settings → Secrets → Actions)
+#   HF_USERNAME   - your HuggingFace username
+#   ENV_SPACE_NAME - name of your env-server Space (e.g. "ci-triage-env")
+#
+# The training Space is NOT auto-synced here (rebuilding mid-training would
+# kill a running job). Manually push to it when you want to update.
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  sync-env-space:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Push to HF Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_USERNAME: ${{ secrets.HF_USERNAME }}
+          ENV_SPACE_NAME: ${{ secrets.ENV_SPACE_NAME }}
+        run: |
+          git config --global user.email "github-action@ci-triage"
+          git config --global user.name "CI Triage Sync"
+
+          REMOTE="https://${HF_USERNAME}:${HF_TOKEN}@huggingface.co/spaces/${HF_USERNAME}/${ENV_SPACE_NAME}"
+          git remote add hf-env "$REMOTE" 2>/dev/null || git remote set-url hf-env "$REMOTE"
+
+          # Force-push main → Space repo (Space will auto-rebuild Docker image)
+          git push hf-env HEAD:main --force
+          echo "✓ Pushed to https://huggingface.co/spaces/${HF_USERNAME}/${ENV_SPACE_NAME}"

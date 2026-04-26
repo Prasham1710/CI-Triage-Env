@@ -1,0 +1,48 @@
+# Training Space Dockerfile — JupyterLab + auto-run on port 7860.
+#
+# Two modes (controlled by START_MODE env var in Space settings):
+#   START_MODE=jupyter  → opens JupyterLab so you can run train_grpo.ipynb manually
+#   START_MODE=auto     → runs train.py immediately, no interaction needed
+#
+# HF Space secrets to set:
+#   HF_TOKEN, HF_USERNAME, WANDB_API_KEY
+#   HF_SCENARIOS_REPO, HF_SFT_DATASET_REPO, HF_MODEL_REPO (optional)
+#   GRPO_STEPS (optional, default 100)
+
+FROM pytorch/pytorch:2.4.0-cuda12.1-cudnn9-devel
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git curl build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+# 1. Install unsloth (must come after torch, hence not in pyproject extras)
+RUN pip install --no-cache-dir \
+    "unsloth[cu121-torch240] @ git+https://github.com/unslothai/unsloth.git"
+
+# 2. Install project + all training deps
+COPY pyproject.toml ./
+COPY src/ src/
+RUN pip install --no-cache-dir -e ".[data,training]"
+
+# 3. JupyterLab for interactive mode
+RUN pip install --no-cache-dir jupyterlab ipywidgets
+
+# 4. Copy notebooks and training scripts
+COPY notebooks/ notebooks/
+COPY train.py ./
+
+# Persistent storage expected at /data (attach 20 GB disk in Space settings)
+RUN mkdir -p /data/checkpoints /data/scenarios /data/sft_dataset
+
+EXPOSE 7860
+
+ENV START_MODE=jupyter
+
+COPY train-entrypoint.sh /train-entrypoint.sh
+RUN chmod +x /train-entrypoint.sh
+ENTRYPOINT ["/train-entrypoint.sh"]

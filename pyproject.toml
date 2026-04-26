@@ -14,6 +14,7 @@ dependencies = [
     "huggingface_hub>=0.23",
     "jsonschema>=4.21",
     "openenv-core>=0.2.3",
+    "fastmcp>=0.4",
 ]
 
 [project.optional-dependencies]
