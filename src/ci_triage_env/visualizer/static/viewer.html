@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>CI-Triage Episode Replay</title>
+  <link rel="stylesheet" href="viewer.css">
+</head>
+<body>
+  <header class="header">
+    <h1>CI-Triage Episode Replay</h1>
+    <div class="loaders">
+      <label>Trace <input type="file" id="trace-loader" accept=".json"></label>
+      <label>Scenario (optional) <input type="file" id="scenario-loader" accept=".json"></label>
+      <label>Compare (optional) <input type="file" id="trace-loader-2" accept=".json"></label>
+      <button id="reset-btn" type="button">Clear</button>
+    </div>
+    <div class="empty-state" id="empty-state">Load an EpisodeTrace JSON to begin.</div>
+  </header>
+  <main class="container">
+    <aside class="left-panel">
+      <h2>Failure</h2>
+      <div id="failure-summary" class="card">—</div>
+      <h2>Budget</h2>
+      <div id="budget" class="card">—</div>
+      <h2>Ground Truth</h2>
+      <div id="ground-truth" class="card hidden-until-terminal">—</div>
+    </aside>
+
+    <section class="main-panel">
+      <h2>Trajectory</h2>
+      <div id="timeline" class="timeline"></div>
+      <h2>Step Detail</h2>
+      <div id="step-detail" class="card detail">Click a step on the timeline.</div>
+    </section>
+
+    <aside class="right-panel">
+      <h2>Reward Breakdown</h2>
+      <div id="reward-breakdown" class="card">—</div>
+      <h2>Counterfactual Probe</h2>
+      <div id="counterfactual" class="card">—</div>
+      <h2>Comparison</h2>
+      <div id="comparison" class="card">Load a second trace to compare.</div>
+    </aside>
+  </main>
+
+  <script src="viewer.js"></script>
+</body>
+</html>
